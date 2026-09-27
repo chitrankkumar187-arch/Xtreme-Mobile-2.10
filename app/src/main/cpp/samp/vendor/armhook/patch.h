@@ -5,7 +5,7 @@
 #include <asm/unistd.h>
 #include <unistd.h>
 #include <ctype.h>
-#include <link.h>
+#include <Link.h>
 #include <sys/cachectl.h>
 
 #ifdef __arm__
