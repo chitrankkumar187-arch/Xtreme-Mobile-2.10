@@ -5,8 +5,6 @@ buildscript {
         google()
         mavenCentral()
         jcenter()
-
-        maven { url 'https://artifacts.applovin.com/android' }
     }
 
     dependencies {
@@ -21,13 +19,11 @@ allprojects {
         google()
         mavenCentral()
 
-        // Required for PRDownloader 1.0.1
+        // PRDownloader 1.0.1
         maven { url 'https://maven.scijava.org/content/repositories/public/' }
 
         maven { url 'https://jitpack.io' }
         maven { url 'https://oss.sonatype.org/content/repositories/snapshots/' }
-
-        maven { url 'https://artifacts.applovin.com/android' }
 
         jcenter()
     }
