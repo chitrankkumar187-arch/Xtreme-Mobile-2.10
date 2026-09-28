@@ -60,7 +60,7 @@ android {
 
     buildTypes {
         debug {
-            debuggable false
+            debuggable true
             jniDebuggable false
             minifyEnabled false
 

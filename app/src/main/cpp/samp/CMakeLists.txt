@@ -9,6 +9,8 @@ elseif(${ANDROID_ABI} STREQUAL "arm64-v8a")
     add_definitions(-DVER_x32=false)
 endif()
 
+add_definitions(-DVER_SAMP=1)
+
 # Add source files
 file(GLOB_RECURSE SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/*.c*
@@ -43,5 +45,5 @@ target_link_libraries(samp log EGL GLESv3 opus shadowhook::shadowhook ${CMAKE_CU
 
 # Set compilation flags
 #
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w -s -g -fvisibility=hidden -pthread -Wall -O3 -fexceptions")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w -g3 -fno-omit-frame-pointer -pthread -Wall -O0 -fexceptions")
 
