@@ -13,6 +13,7 @@
 #include "Pickups.h"
 #include "game/Models/ModelInfo.h"
 #include "game/Collision/Collision.h"
+#include <cmath>
 
 void ApplySAMPPatchesInGame();
 void InitScripting();
@@ -316,17 +317,36 @@ void CGame::DrawGangZone(float fPos[], uint32_t dwColor, uint32_t dwUnk)
 // 0.3.7
 uint32_t CGame::CreatePickup(int iModel, int iType, float x, float y, float z, int *pdwIndex)
 {
-    uintptr hnd;
+    uintptr hnd = 0;
+
+    // Do not let malformed network data reach GTA's native pickup constructor.
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
+        FLog("[PICKUP] Dropping pickup with non-finite coordinates: model=%d type=%d", iModel, iType);
+        if (pdwIndex) *pdwIndex = 0;
+        return 0;
+    }
 
     auto dwModelArray = CModelInfo::ms_modelInfoPtrs;
-    if(dwModelArray[iModel] == nullptr)
-        iModel = 18631; // вопросик
+    // 19000-19999 is the SA-MP custom-model range; these models are not
+    // guaranteed to exist in this GTA SA mobile build and have caused native
+    // crashes in CPickups::GenerateNewOne / CWorld::Add.
+    if (iModel < 0 || iModel >= CModelInfo::NUM_MODEL_INFOS ||
+        (iModel >= 19000 && iModel <= 19999) || dwModelArray[iModel] == nullptr) {
+        FLog("[PICKUP] Replacing unsupported model %d with fallback 18631", iModel);
+        iModel = 18631; // existing question-mark fallback used by this client
+    }
+
+    if (dwModelArray[18631] == nullptr) {
+        FLog("[PICKUP] Fallback model 18631 is unavailable; dropping pickup");
+        if (pdwIndex) *pdwIndex = 0;
+        return 0;
+    }
 
     ScriptCommand(&create_pickup, iModel, iType, x, y, z, &hnd);
 
     int lol = 32 * (uint16_t)hnd;
-    if(lol) lol /= 32;
-    if(pdwIndex) *pdwIndex = lol;
+    if (lol) lol /= 32;
+    if (pdwIndex) *pdwIndex = lol;
 
     return hnd;
 }

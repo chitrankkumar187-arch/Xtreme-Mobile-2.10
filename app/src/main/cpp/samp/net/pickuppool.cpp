@@ -62,20 +62,38 @@ void CPickupPool::Process()
 // 0.3.7
 void CPickupPool::New(PICKUP *pPickup, int iPickup)
 {
-	if (m_iPickupCount >= MAX_PICKUPS || iPickup < 0 || iPickup >= MAX_PICKUPS) return;
+    if (!pPickup || !pGame || iPickup < 0 || iPickup >= MAX_PICKUPS)
+        return;
 
-	if (m_dwHnd[iPickup] != 0) {
-		ScriptCommand(&destroy_pickup, m_dwHnd[iPickup]);
-	}
+    const bool replacing = (m_dwHnd[iPickup] != 0);
+    if (!replacing && m_iPickupCount >= MAX_PICKUPS)
+        return;
 
-	memcpy(&m_Pickups[iPickup], pPickup, sizeof(PICKUP));
-	m_droppedWeapon[iPickup].bDroppedWeapon = false;
+    if (replacing) {
+        ScriptCommand(&destroy_pickup, m_dwHnd[iPickup]);
+        m_dwHnd[iPickup] = 0;
+        m_dwGTAId[iPickup] = 0xFFFFFFFF;
+        if (m_iPickupCount > 0)
+            --m_iPickupCount;
+    }
 
-	int dwGTAId = 0;
-	m_dwHnd[iPickup] = pGame->CreatePickup(pPickup->iModel, pPickup->iType,
-		pPickup->fX, pPickup->fY, pPickup->fZ, &dwGTAId);
-	m_dwGTAId[iPickup] = dwGTAId;
-	m_iPickupCount++;
+    memcpy(&m_Pickups[iPickup], pPickup, sizeof(PICKUP));
+    m_droppedWeapon[iPickup].bDroppedWeapon = false;
+    m_iTimer[iPickup] = 0;
+
+    int dwGTAId = 0;
+    const uintptr_t handle = pGame->CreatePickup(pPickup->iModel, pPickup->iType,
+        pPickup->fX, pPickup->fY, pPickup->fZ, &dwGTAId);
+
+    if (handle == 0) {
+        m_dwHnd[iPickup] = 0;
+        m_dwGTAId[iPickup] = 0xFFFFFFFF;
+        return;
+    }
+
+    m_dwHnd[iPickup] = handle;
+    m_dwGTAId[iPickup] = dwGTAId;
+    ++m_iPickupCount;
 }
 // 0.3.7
 void CPickupPool::Destroy(int iPickup)

@@ -38,9 +38,17 @@ bool CPickup::IsVisible() {
 #include "net/netgame.h"
 extern CNetGame *pNetGame;
 bool CPickup::Update() {
-    if(!pNetGame || !pNetGame->GetPlayerPool())
+    if (!pNetGame || !pNetGame->GetPlayerPool())
         return false;
-    auto &ped = pNetGame->GetPlayerPool()->GetLocalPlayer()->GetPlayerPed()->m_pPed;
+
+    auto *pLocalPlayer = pNetGame->GetPlayerPool()->GetLocalPlayer();
+    if (!pLocalPlayer || !pLocalPlayer->GetPlayerPed())
+        return false;
+
+    auto *pPlayerPed = pLocalPlayer->GetPlayerPed();
+    auto *ped = pPlayerPed->m_pPed;
+    if (!ped)
+        return false;
 
     auto oldState = m_bIsPicked;
 

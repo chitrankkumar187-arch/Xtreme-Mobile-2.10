@@ -3,12 +3,14 @@
 //
 
 #include "Pickups.h"
+#include "../main.h"
 #include "game.h"
 #include "net/netgame.h"
 #include "../vendor/armhook/patch.h"
 #include "World.h"
 #include "Pickup.h"
 #include "Camera.h"
+#include "game/Models/ModelInfo.h"
 
 extern CNetGame* pNetGame;
 void CPickups::InjectHooks() {
@@ -24,6 +26,15 @@ void CPickups::Update() {
         if (pickup.m_nPickupType == PICKUP_NONE)
             continue;
 
+        const int modelId = pickup.m_nModelIndex;
+        if (modelId < 0 || modelId >= CModelInfo::NUM_MODEL_INFOS ||
+            (modelId >= 19000 && modelId <= 19999)) {
+            FLog("[PICKUP] Skipping unsupported engine pickup model %d", modelId);
+            pickup.GetRidOfObjects();
+            pickup.m_nPickupType = PICKUP_NONE;
+            continue;
+        }
+
         if (pickup.m_nFlags.bVisible = pickup.IsVisible()) {
             if (!pickup.m_nFlags.bDisabled && !pickup.m_pObject) {
                 pickup.GiveUsAPickUpObject(&pickup.m_pObject, -1);
@@ -32,9 +43,10 @@ void CPickups::Update() {
                     CWorld::Add(obj);
                 }
             }
-            if (pickup.Update()) {
+            if (pickup.Update() && pNetGame) {
                 CPickupPool *pPickups = pNetGame->GetPickupPool();
-                pPickups->PickedUp( i );
+                if (pPickups)
+                    pPickups->PickedUp(i);
             }
         } else {
             pickup.GetRidOfObjects();

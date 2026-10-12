@@ -4,6 +4,8 @@
 #include "../gui/gui.h"
 #include "../vendor/encoding/encoding.h"
 #include "../settings.h"
+#include "../game/Models/ModelInfo.h"
+#include <cmath>
 
 extern UI* pUI;
 extern CGame *pGame;
@@ -936,21 +938,52 @@ void UpdateScoresPingsIPs(RPCParameters *rpcParams)
 // 0.3.7
 void Pickup(RPCParameters *rpcParams)
 {
-	Log::traceLastFunc("[RPC-IN] Pickup");
+    Log::traceLastFunc("[RPC-IN] Pickup");
 
-	unsigned char * Data = reinterpret_cast<unsigned char *>(rpcParams->input);
-	int iBitLength = rpcParams->numberOfBitsOfData;
+    if (!rpcParams || !rpcParams->input || !pNetGame) {
+        FLog("[PICKUP] Ignoring pickup RPC with null parameters");
+        return;
+    }
 
-	int iIndex;
-	PICKUP Pickup;
-	RakNet::BitStream bsData(Data, (iBitLength / 8) + 1, false);
-	bsData.Read(iIndex);
-	bsData.Read((char*)&Pickup, sizeof(PICKUP));
+    unsigned char *Data = reinterpret_cast<unsigned char *>(rpcParams->input);
+    const int iBitLength = rpcParams->numberOfBitsOfData;
+    constexpr int kRequiredPickupBits = (sizeof(int) + sizeof(PICKUP)) * 8;
+    if (iBitLength < kRequiredPickupBits) {
+        FLog("[PICKUP] Ignoring truncated pickup RPC: %d bits", iBitLength);
+        return;
+    }
 
-	CPickupPool *pPickupPool = pNetGame->GetPickupPool();
-	if (pPickupPool) {
-		pPickupPool->New(&Pickup, iIndex);
-	}
+    int iIndex = -1;
+    PICKUP pickup{};
+    RakNet::BitStream bsData(Data, (iBitLength / 8) + 1, false);
+    if (!bsData.Read(iIndex) || !bsData.Read(reinterpret_cast<char *>(&pickup), sizeof(PICKUP))) {
+        FLog("[PICKUP] Ignoring unreadable pickup RPC");
+        return;
+    }
+
+    if (iIndex < 0 || iIndex >= MAX_PICKUPS) {
+        FLog("[PICKUP] Ignoring invalid pickup index %d", iIndex);
+        return;
+    }
+
+    if (!std::isfinite(pickup.fX) || !std::isfinite(pickup.fY) || !std::isfinite(pickup.fZ)) {
+        FLog("[PICKUP] Ignoring model %d with invalid coordinates", pickup.iModel);
+        return;
+    }
+
+    // This client has no compatible GTA SA model assets for the server's
+    // SA-MP custom pickup IDs. Substitute the client's existing fallback.
+    if (pickup.iModel < 0 || pickup.iModel >= CModelInfo::NUM_MODEL_INFOS ||
+        (pickup.iModel >= 19000 && pickup.iModel <= 19999) ||
+        CModelInfo::ms_modelInfoPtrs[pickup.iModel] == nullptr) {
+        FLog("[PICKUP] Replacing unsupported server pickup model %d with 18631", pickup.iModel);
+        pickup.iModel = 18631;
+    }
+
+    CPickupPool *pPickupPool = pNetGame->GetPickupPool();
+    if (pPickupPool) {
+        pPickupPool->New(&pickup, iIndex);
+    }
 }
 // 0.3.7
 void DestroyPickup(RPCParameters *rpcParams)
