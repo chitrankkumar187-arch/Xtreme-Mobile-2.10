@@ -1,10 +1,19 @@
 package com.samp.mobile.game;
 
+import android.Manifest;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Toast;
+
+import androidx.core.content.ContextCompat;
 
 import com.google.firebase.crashlytics.FirebaseCrashlytics;
 import com.joom.paranoid.Obfuscate;
@@ -21,7 +30,10 @@ import java.nio.charset.StandardCharsets;
 @Obfuscate
 public class SAMP extends GTASA implements CustomKeyboard.InputListener, HeightProvider.HeightListener {
     private static final String TAG = "SAMP";
+    private static final int REQUEST_ALL_FILES_ACCESS = 9741;
+    private static final int REQUEST_LEGACY_STORAGE = 9742;
     private static SAMP instance;
+    private boolean nativeSampStarted = false;
 
     private CustomKeyboard mKeyboard;
     private DialogManager mDialog;
@@ -190,15 +202,93 @@ public class SAMP extends GTASA implements CustomKeyboard.InputListener, HeightP
 
         instance = this;
 
-        try {
-            initializeSAMP();
-        } catch (UnsatisfiedLinkError e5) {
-            Log.e(TAG, e5.getMessage());
-        }
+        ensureStorageAccessThenInitialize();
 
     }
 
     private native void initializeSAMP();
+
+    /** Request access to the shared GTA folder before native startup. */
+    private void ensureStorageAccessThenInitialize() {
+        if (nativeSampStarted) return;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                try {
+                    Intent intent = new Intent(
+                            Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                            Uri.parse("package:" + getPackageName()));
+                    startActivityForResult(intent, REQUEST_ALL_FILES_ACCESS);
+                } catch (Exception e) {
+                    try {
+                        Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                        startActivityForResult(intent, REQUEST_ALL_FILES_ACCESS);
+                    } catch (Exception fallbackError) {
+                        Log.e(TAG, "Unable to open All files access settings", fallbackError);
+                        Toast.makeText(this, "Allow SA-MP Mobile to manage all files, then reopen it.", Toast.LENGTH_LONG).show();
+                        finish();
+                    }
+                }
+                return;
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            boolean readGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_GRANTED;
+            boolean writeGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_GRANTED;
+            if (!readGranted || !writeGranted) {
+                requestPermissions(new String[] {
+                        Manifest.permission.READ_EXTERNAL_STORAGE,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                }, REQUEST_LEGACY_STORAGE);
+                return;
+            }
+        }
+
+        startNativeSampOnce();
+    }
+
+    private void startNativeSampOnce() {
+        if (nativeSampStarted) return;
+        nativeSampStarted = true;
+        try {
+            initializeSAMP();
+        } catch (UnsatisfiedLinkError e) {
+            nativeSampStarted = false;
+            Log.e(TAG, "initializeSAMP failed", e);
+            Toast.makeText(this, "SA-MP native initialization failed. Check the log.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_ALL_FILES_ACCESS) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
+                ensureStorageAccessThenInitialize();
+            } else {
+                Toast.makeText(this, "All files access is required to read the GTA folder.", Toast.LENGTH_LONG).show();
+                finish();
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_LEGACY_STORAGE) {
+            boolean granted = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_GRANTED
+                    && ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_GRANTED;
+            if (granted) {
+                startNativeSampOnce();
+            } else {
+                Toast.makeText(this, "Storage permission is required to read the GTA folder.", Toast.LENGTH_LONG).show();
+                finish();
+            }
+        }
+    }
 
 
 

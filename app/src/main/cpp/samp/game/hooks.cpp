@@ -1602,11 +1602,19 @@ bool RwResourcesFreeResEntry_hook(void* entry)
 
 static uint32_t dwRLEDecompressSourceSize = 0;
 
-size_t (*OS_FileRead)(OSFile a1, void *buffer, size_t numBytes);
-size_t OS_FileRead_hook(OSFile a1, void *buffer, size_t numBytes)
+// The original GTASA symbol is _Z11OS_FileReadPvS_i, so its third
+// argument is an int. NvFOpen can return nullptr when storage access fails;
+// do not pass that invalid handle to the engine's file reader.
+int (*OS_FileRead)(OSFile a1, void *buffer, int numBytes);
+int OS_FileRead_hook(OSFile a1, void *buffer, int numBytes)
 {
-    dwRLEDecompressSourceSize = numBytes;
+    if (a1 == nullptr || buffer == nullptr || numBytes <= 0 || OS_FileRead == nullptr)
+    {
+        FLog("OS_FileRead_hook: invalid argument (file=%p, buffer=%p, size=%d)", a1, buffer, numBytes);
+        return 0;
+    }
 
+    dwRLEDecompressSourceSize = static_cast<uint32_t>(numBytes);
     return OS_FileRead(a1, buffer, numBytes);
 }
 
